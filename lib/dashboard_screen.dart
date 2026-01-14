@@ -50,7 +50,7 @@ class DashboardScreen extends StatelessWidget {
                   style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 5),
-                // Displaying the AI-detected gender
+                
                 Chip(
                   label: Text("AI Detected: ${data['gender'] ?? 'N/A'}"),
                   backgroundColor: Colors.blue.withOpacity(0.2),

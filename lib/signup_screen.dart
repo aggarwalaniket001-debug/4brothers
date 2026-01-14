@@ -1,4 +1,4 @@
-// lib/signup_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -20,14 +20,14 @@ class _SignupScreenState extends State<SignupScreen> {
     
     setState(() => _isLoading = true);
     try {
-      // Step 1: Create the User Auth Account
+      
       final response = await Supabase.instance.client.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
       if (response.user != null && mounted) {
-        // Step 2: Move to personalization (Username/Gender selection)
+       
         Navigator.pushReplacementNamed(context, '/setup');
       }
     } on AuthException catch (e) {

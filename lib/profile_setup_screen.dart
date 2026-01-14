@@ -11,6 +11,7 @@ class ProfileSetupScreen extends StatefulWidget {
 
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _usernameController = TextEditingController();
+  final _fullNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _cityController = TextEditingController();
   
@@ -18,12 +19,21 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   bool _isUsernameValid = false;
   bool _isLoading = false;
 
-  // Real-time Username Check
-  Future<void> _checkUsername(String val) async {
-    if (val.length < 3) {
-      setState(() => _isUsernameValid = false);
-      return;
+  // 1. SIGN OUT LOGIC: Clears the persistent session
+  Future<void> _signOut() async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+      // The StreamBuilder in main.dart will automatically see the 'null' session
+      // and redirect you to the SelectionScreen instantly.
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Logout Failed: $e")),
+      );
     }
+  }
+
+  Future<void> _checkUsername(String val) async {
+    if (val.length < 3) return;
     try {
       final res = await Supabase.instance.client
           .from('profiles')
@@ -32,55 +42,45 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           .maybeSingle();
       if (mounted) setState(() => _isUsernameValid = (res == null));
     } catch (e) {
-      if (mounted) setState(() => _isUsernameValid = true); // Safety for demo
+      if (mounted) setState(() => _isUsernameValid = true); 
     }
   }
 
-  // THE WORKING SAVE LOGIC
   Future<void> _saveProfile() async {
     setState(() => _isLoading = true);
+    final user = Supabase.instance.client.auth.currentUser;
 
-    // 1. Session Guard: Try to get session, wait if null
-    var session = Supabase.instance.client.auth.currentSession;
-    if (session == null) {
-      await Future.delayed(const Duration(milliseconds: 800)); // Wait for SDK sync
-      session = Supabase.instance.client.auth.currentSession;
-    }
-
-    final user = session?.user;
-
-    // 2. Fallback: If still null, stop the crash
     if (user == null) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Error: User session not found. Try logging in again.")),
+          const SnackBar(content: Text("No active session found."))
       );
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       return;
     }
 
     try {
       String? imageUrl;
-      // Handle Profile Pic Upload
       if (_imageFile != null) {
-        final path = '${user.id}/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final path = '${user.id}/pfp.jpg';
         await Supabase.instance.client.storage.from('avatars').upload(
-          path, _imageFile!, fileOptions: const FileOptions(upsert: true)
+            path, _imageFile!, fileOptions: const FileOptions(upsert: true)
         );
         imageUrl = Supabase.instance.client.storage.from('avatars').getPublicUrl(path);
       }
 
-      // 3. Update the Profile in Database
-      await Supabase.instance.client.from('profiles').update({
+      // Upsert logic to handle both anonymous and registered profiles
+      await Supabase.instance.client.from('profiles').upsert({
+        'id': user.id,
         'username': _usernameController.text.trim(),
+        'full_name': _fullNameController.text.trim(),
         'phone_number': _phoneController.text.trim(),
         'city': _cityController.text.trim(),
         if (imageUrl != null) 'profile_pic_url': imageUrl,
-      }).eq('id', user.id);
+      });
 
-      if (mounted) Navigator.pushReplacementNamed(context, '/verify');
+      if (mounted) Navigator.pushReplacementNamed(context, '/feed');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Save Error: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -89,7 +89,18 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("FINISH PROFILE"), centerTitle: true),
+      appBar: AppBar(
+        title: const Text("FINISH PROFILE"),
+        centerTitle: true,
+        // 2. LOGOUT BUTTON IN APPBAR
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.redAccent),
+            onPressed: _signOut,
+            tooltip: "Logout to Selection Screen",
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -100,27 +111,28 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 if (file != null) setState(() => _imageFile = File(file.path));
               },
               child: CircleAvatar(
-                radius: 55,
+                radius: 50, 
                 backgroundColor: Colors.white10,
-                backgroundImage: _imageFile != null ? FileImage(_imageFile!) : null,
-                child: _imageFile == null ? const Icon(Icons.add_a_photo) : null,
+                backgroundImage: _imageFile != null ? FileImage(_imageFile!) : null, 
+                child: _imageFile == null ? const Icon(Icons.add_a_photo) : null
               ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
             TextField(controller: _usernameController, onChanged: _checkUsername, decoration: const InputDecoration(labelText: "Username")),
-            const SizedBox(height: 15),
-            TextField(controller: _phoneController, decoration: const InputDecoration(labelText: "Phone"), keyboardType: TextInputType.phone),
-            const SizedBox(height: 15),
+            TextField(controller: _fullNameController, decoration: const InputDecoration(labelText: "Full Name")),
+            TextField(controller: _phoneController, decoration: const InputDecoration(labelText: "Phone Number")),
             TextField(controller: _cityController, decoration: const InputDecoration(labelText: "City")),
             const SizedBox(height: 40),
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: _isUsernameValid ? Colors.redAccent : Colors.grey[800]),
-                onPressed: _isUsernameValid && !_isLoading ? _saveProfile : null,
-                child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("FINISH & VERIFY FACE"),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 55), 
+                  backgroundColor: Colors.redAccent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
               ),
+              onPressed: _isUsernameValid && !_isLoading ? _saveProfile : null,
+              child: _isLoading 
+                  ? const CircularProgressIndicator(color: Colors.white) 
+                  : const Text("FINISH & ENTER MIST", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
