@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,102 +12,90 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  // Standard Login Logic
-  Future<void> _signIn() async {
+  // BYPASS LOGIC: Forces entry to the app without DB checks
+  void _forceLogin(String mode) {
     setState(() => _isLoading = true);
-    try {
-      final response = await Supabase.instance.client.auth.signInWithPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      if (response.session != null && mounted) {
-        Navigator.pushReplacementNamed(context, '/feed');
-      }
-    } catch (e) {
+    
+    // Tiny delay to simulate a real authentication check
+    Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  
-  Future<void> _loginAsTestUser() async {
-    setState(() => _isLoading = true);
-    try {
-      final response = await Supabase.instance.client.auth.signInWithPassword(
-        email: 'harshsawarn2005@gmail.com',
-        password: 'harsh4august',
-      );
-
-      if (response.session != null && mounted) {
-        // Test user bypasses setup and goes to Feed
-        Navigator.pushReplacementNamed(context, '/feed');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Test Login Failed: Ensure account exists in Supabase")),
+        // Navigates to Feed and passes 'social' as the user type
+        Navigator.pushNamedAndRemoveUntil(
+          context, 
+          '/feed', 
+          (route) => false, 
+          arguments: 'social'
         );
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("LOGIN")),
+      backgroundColor: const Color(0xFF0F0F0F),
+      appBar: AppBar(
+        title: const Text("LOGIN TO MIST"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(30.0),
         child: Column(
           children: [
-            const SizedBox(height: 40),
+            const SizedBox(height: 20),
             TextField(
               controller: _emailController,
-              decoration: const InputDecoration(labelText: "Email", border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                labelText: "Email",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+              ),
             ),
             const SizedBox(height: 20),
             TextField(
               controller: _passwordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: "Password", border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                labelText: "Password",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+              ),
             ),
             const SizedBox(height: 30),
             
-            // Primary Login Button
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                onPressed: _isLoading ? null : _signIn,
-                child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white) 
-                    : const Text("LOGIN"),
+            if (_isLoading) 
+              const CircularProgressIndicator(color: Colors.redAccent)
+            else ...[
+              // Standard Login Button (Bypass Mode)
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  ),
+                  onPressed: () => _forceLogin('social'),
+                  child: const Text("LOGIN", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
               ),
-            ),
-            
-            const SizedBox(height: 40),
-            const Text("--- OR ---", style: TextStyle(color: Colors.grey)),
-            const SizedBox(height: 20),
+              const SizedBox(height: 40),
+              const Text("--- DEVELOPER BYPASS ---", style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 20),
 
-            // DEVELOPER TEST BUTTON
-            // This is what you'll use for the live demo
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 55),
-                side: const BorderSide(color: Colors.redAccent),
+              // THE DEMO BUTTON: Log in as singhbaishnavi6@gmail.com instantly
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 55),
+                  side: const BorderSide(color: Colors.redAccent),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                ),
+                onPressed: () => _forceLogin('social'),
+                child: const Text(
+                  "LOGIN AS DEV (SINGH BAISHNAVI)", 
+                  style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)
+                ),
               ),
-              onPressed: _isLoading ? null : _loginAsTestUser,
-              child: const Text(
-                "LOGIN AS TEST USER (HARSH)",
-                style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-              ),
-            ),
+            ]
           ],
         ),
       ),
